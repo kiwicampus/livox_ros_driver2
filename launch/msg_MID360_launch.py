@@ -38,6 +38,8 @@ def generate_launch_description():
         executable="livox_ros_driver2_node",
         name="livox_lidar_publisher",
         output="screen",
+        respawn=True,
+        respawn_delay=5.0,
         parameters=livox_ros2_params,
     )
 
