@@ -26,7 +26,9 @@
 #define LIVOX_ROS_DRIVER2_LDDC_H_
 
 #include "include/livox_ros_driver2.h"
-
+#include <tf2/LinearMath/Quaternion.h>
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "geometry_msgs/msg/quaternion.hpp"
 #include "driver_node.h"
 #include "lds.h"
 
@@ -44,6 +46,7 @@ typedef enum {
   kLivoxCustomMsg = 1,
   kPclPxyziMsg = 2,
   kLivoxImuMsg = 3,
+  kLivoxQuaternionMsg = 4,
 } TransferType;
 
 /** Type-Definitions based on ROS versions */
@@ -54,6 +57,7 @@ using PointCloud2 = sensor_msgs::PointCloud2;
 using PointField = sensor_msgs::PointField;
 using CustomMsg = livox_ros_driver2::CustomMsg;
 using CustomPoint = livox_ros_driver2::CustomPoint;
+using QuaternionMsg = geometry_msgs::Quaternion
 using ImuMsg = sensor_msgs::Imu;
 #elif defined BUILDING_ROS2
 template <typename MessageT> using Publisher = rclcpp::Publisher<MessageT>;
@@ -62,6 +66,7 @@ using PointCloud2 = sensor_msgs::msg::PointCloud2;
 using PointField = sensor_msgs::msg::PointField;
 using CustomMsg = livox_ros_driver2::msg::CustomMsg;
 using CustomPoint = livox_ros_driver2::msg::CustomPoint;
+using QuaternionMsg = geometry_msgs::msg::Quaternion;
 using ImuMsg = sensor_msgs::msg::Imu;
 #endif
 
@@ -120,6 +125,8 @@ class Lddc final {
 
   void InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timestamp);
 
+  void GetRotationAngles(ImuMsg& imu_msg, const uint8_t index);
+
   void FillPointsToPclMsg(PointCloud& pcl_msg, LivoxPointXyzrtlt* src_point, uint32_t num);
   void FillPointsToCustomMsg(CustomMsg& livox_msg, LivoxPointXyzrtlt* src_point, uint32_t num,
       uint32_t offset_time, uint32_t point_interval, uint32_t echo_num);
@@ -130,6 +137,7 @@ class Lddc final {
 
   PublisherPtr GetCurrentPublisher(uint8_t index);
   PublisherPtr GetCurrentImuPublisher(uint8_t index);
+  PublisherPtr GetCurrentQuaternionPublisher(uint8_t index);
 
  private:
   uint8_t transfer_format_;
@@ -139,6 +147,9 @@ class Lddc final {
   double publish_frq_;
   uint32_t publish_period_ns_;
   std::string frame_id_;
+  std::vector<double> _imu_accel_x_vector;
+  std::vector<double> _imu_accel_y_vector;
+  std::vector<double> _imu_accel_z_vector;
 
 #ifdef BUILDING_ROS1
   bool enable_lidar_bag_;
@@ -153,6 +164,8 @@ class Lddc final {
   PublisherPtr global_pub_;
   PublisherPtr private_imu_pub_[kMaxSourceLidar];
   PublisherPtr global_imu_pub_;
+  PublisherPtr private_quaternion_pub_[kMaxSourceLidar];
+  PublisherPtr quaternion_imu_pub_;
 #endif
 
   livox_ros::DriverNode *cur_node_;
