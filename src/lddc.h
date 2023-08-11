@@ -29,8 +29,10 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "geometry_msgs/msg/quaternion.hpp"
+#include <std_srvs/srv/trigger.hpp>
 #include "driver_node.h"
 #include "lds.h"
+#include <deque>
 
 namespace livox_ros {
 
@@ -49,6 +51,11 @@ typedef enum {
   kLivoxQuaternionMsg = 4,
 } TransferType;
 
+/** The service type of transfer */
+typedef enum {
+  kCalibrationSrv = 5,
+} TransferSrvType;
+
 /** Type-Definitions based on ROS versions */
 #ifdef BUILDING_ROS1
 using Publisher = ros::Publisher;
@@ -61,13 +68,16 @@ using QuaternionMsg = geometry_msgs::Quaternion
 using ImuMsg = sensor_msgs::Imu;
 #elif defined BUILDING_ROS2
 template <typename MessageT> using Publisher = rclcpp::Publisher<MessageT>;
+template <typename MessageT> using Service = rclcpp::Service<MessageT>;
 using PublisherPtr = std::shared_ptr<rclcpp::PublisherBase>;
+using ServicePtr = std::shared_ptr<rclcpp::ServiceBase>;
 using PointCloud2 = sensor_msgs::msg::PointCloud2;
 using PointField = sensor_msgs::msg::PointField;
 using CustomMsg = livox_ros_driver2::msg::CustomMsg;
 using CustomPoint = livox_ros_driver2::msg::CustomPoint;
 using QuaternionMsg = geometry_msgs::msg::Quaternion;
 using ImuMsg = sensor_msgs::msg::Imu;
+using TriggerSrv = std_srvs::srv::Trigger;
 #endif
 
 using PointCloud = pcl::PointCloud<pcl::PointXYZI>;
@@ -125,19 +135,24 @@ class Lddc final {
 
   void InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timestamp);
 
-  void GetRotationAngles(ImuMsg& imu_msg, const uint8_t index);
+  void StoreAccelerationValues(ImuMsg& imu_msg);
 
   void FillPointsToPclMsg(PointCloud& pcl_msg, LivoxPointXyzrtlt* src_point, uint32_t num);
   void FillPointsToCustomMsg(CustomMsg& livox_msg, LivoxPointXyzrtlt* src_point, uint32_t num,
       uint32_t offset_time, uint32_t point_interval, uint32_t echo_num);
 
+  bool CalibrateLivoxCb(std_srvs::srv::Trigger::Request::SharedPtr req,
+                      std_srvs::srv::Trigger::Response::SharedPtr res);
+
 #ifdef BUILDING_ROS2
   PublisherPtr CreatePublisher(uint8_t msg_type, std::string &topic_name, uint32_t queue_size);
+  ServicePtr CreateService(uint8_t service_type, std::string &service_name);
 #endif
 
   PublisherPtr GetCurrentPublisher(uint8_t index);
   PublisherPtr GetCurrentImuPublisher(uint8_t index);
-  PublisherPtr GetCurrentQuaternionPublisher(uint8_t index);
+  PublisherPtr GetCurrentQuaternionPublisher();
+  ServicePtr GetCurrentCalibService();
 
  private:
   uint8_t transfer_format_;
@@ -147,9 +162,10 @@ class Lddc final {
   double publish_frq_;
   uint32_t publish_period_ns_;
   std::string frame_id_;
-  std::vector<double> _imu_accel_x_vector;
-  std::vector<double> _imu_accel_y_vector;
-  std::vector<double> _imu_accel_z_vector;
+  std::deque<double> _imu_accel_x_vector;
+  std::deque<double> _imu_accel_y_vector;
+  std::deque<double> _imu_accel_z_vector;
+  bool quaternion_vector_filled = false;
 
 #ifdef BUILDING_ROS1
   bool enable_lidar_bag_;
@@ -166,6 +182,7 @@ class Lddc final {
   PublisherPtr global_imu_pub_;
   PublisherPtr private_quaternion_pub_[kMaxSourceLidar];
   PublisherPtr quaternion_imu_pub_;
+  ServicePtr calib_service_;
 #endif
 
   livox_ros::DriverNode *cur_node_;

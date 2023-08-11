@@ -40,6 +40,7 @@ find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -141,6 +142,7 @@ set(dependencies
   tf2
   tf2_geometry_msgs
   geometry_msgs
+  std_srvs
 )
 
 ament_target_dependencies(${PROJECT_NAME}
