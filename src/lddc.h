@@ -53,7 +53,7 @@ typedef enum {
 
 /** The service type of transfer */
 typedef enum {
-  kCalibrationSrv = 5,
+  kCalibrationSrv = 0,
 } TransferSrvType;
 
 /** Type-Definitions based on ROS versions */

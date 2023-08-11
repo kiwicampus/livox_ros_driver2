@@ -556,6 +556,8 @@ bool Lddc::CalibrateLivoxCb(std_srvs::srv::Trigger::Request::SharedPtr req, std_
     _imu_accel_y_vector.clear();
     _imu_accel_z_vector.clear();
 
+    quaternion_vector_filled=false;
+
     return true;
   }
   else{
