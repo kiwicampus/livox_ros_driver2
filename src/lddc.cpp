@@ -620,10 +620,11 @@ std::shared_ptr<rclcpp::PublisherBase> Lddc::CreatePublisher(uint8_t msg_type,
           queue_size);
     }
     else if (kLivoxQuaternionMsg == msg_type)  {
+      rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+      options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
       DRIVER_INFO(*cur_node_,
           "%s publish use quaternion format", topic_name.c_str());
-      return cur_node_->create_publisher<QuaternionMsg>(topic_name,
-          queue_size);
+      return cur_node_->create_publisher<QuaternionMsg>(topic_name,rclcpp::QoS(1).keep_all().transient_local().reliable(), options);
     } else {
       PublisherPtr null_publisher(nullptr);
       return null_publisher;
