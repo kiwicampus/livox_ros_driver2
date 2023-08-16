@@ -85,12 +85,12 @@ def generate_launch_description():
                                         {
                                             "input_frame": "laser_link",
                                             "output_frame": "laser_link",
-                                            "min_x": 0.0,
-                                            "max_x": 2.0,
-                                            "min_y": 0.0,
-                                            "max_y": 2.0,
+                                            "min_x": -0.5,
+                                            "max_x": 0.0,
+                                            "min_y": -0.3,
+                                            "max_y": 0.3,
                                             "min_z": -1.0,
-                                            "max_z": 5.0,
+                                            "max_z": 1.4,
                                             "keep_organized": False,
                                             "negative": True,
                                         }
