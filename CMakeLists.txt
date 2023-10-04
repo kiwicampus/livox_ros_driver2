@@ -37,6 +37,10 @@ find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(PCL REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -53,7 +57,7 @@ set(LIVOX_INTERFACES livox_interfaces2)
 rosidl_generate_interfaces(${LIVOX_INTERFACES}
   "msg/CustomPoint.msg"
   "msg/CustomMsg.msg"
-  DEPENDENCIES builtin_interfaces std_msgs
+  DEPENDENCIES builtin_interfaces std_msgs 
   LIBRARY_NAME ${PROJECT_NAME}
 )
 
@@ -133,6 +137,17 @@ if(BUILD_TESTING)
   #set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+set(dependencies
+  tf2
+  tf2_geometry_msgs
+  geometry_msgs
+  std_srvs
+)
+
+ament_target_dependencies(${PROJECT_NAME}
+  ${dependencies}
+)
 
 ament_auto_package(INSTALL_TO_SHARE
   config

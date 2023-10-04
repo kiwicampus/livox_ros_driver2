@@ -31,6 +31,7 @@
 #include <iomanip>
 #include <math.h>
 #include <stdint.h>
+#include <numeric>
 
 #include "include/ros_headers.h"
 
@@ -148,6 +149,11 @@ void Lddc::DistributeImuData(void) {
   }
   
   lds_->imu_semaphore_.Wait();
+
+  #ifdef BUILDING_ROS2
+    Service<TriggerSrv>::SharedPtr calibration_srv_ptr = std::dynamic_pointer_cast<Service<TriggerSrv>>(GetCurrentCalibService());
+  #endif
+  
   for (uint32_t i = 0; i < lds_->lidar_count_; i++) {
     uint32_t lidar_id = i;
     LidarDevice *lidar = &lds_->lidars_[lidar_id];
@@ -495,6 +501,71 @@ void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timest
   imu_msg.linear_acceleration.z = imu_data.acc_z;
 }
 
+void Lddc::StoreAccelerationValues(ImuMsg& imu_msg) {
+
+  _imu_accel_x_vector.push_back(imu_msg.linear_acceleration.x);
+  _imu_accel_y_vector.push_back(imu_msg.linear_acceleration.y);
+  _imu_accel_z_vector.push_back(imu_msg.linear_acceleration.z);
+
+  if (_imu_accel_x_vector.size() > 30)
+  {
+    quaternion_vector_filled = true;
+
+  _imu_accel_x_vector.pop_front();
+  _imu_accel_y_vector.pop_front();
+  _imu_accel_z_vector.pop_front();
+  }
+}
+
+bool Lddc::CalibrateLivoxCb(std_srvs::srv::Trigger::Request::SharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res){
+  
+  if(quaternion_vector_filled){
+    
+    #ifdef BUILDING_ROS1
+      PublisherPtr publisher_ptr = GetCurrentQuaternionPublisher();
+    #elif defined BUILDING_ROS2
+      Publisher<QuaternionMsg>::SharedPtr publisher_ptr = std::dynamic_pointer_cast<Publisher<QuaternionMsg>>(GetCurrentQuaternionPublisher());
+    #endif
+
+    double accel_x = std::accumulate(_imu_accel_x_vector.begin(), _imu_accel_x_vector.end(), 0.0) / _imu_accel_x_vector.size();
+    double accel_y = std::accumulate(_imu_accel_y_vector.begin(), _imu_accel_y_vector.end(), 0.0) / _imu_accel_y_vector.size();
+    double accel_z = std::accumulate(_imu_accel_z_vector.begin(), _imu_accel_z_vector.end(), 0.0) / _imu_accel_z_vector.size();
+
+    double livox_pitch = atan2((-accel_x), sqrt(accel_y * accel_y + accel_z * accel_z));
+    double livox_roll =  atan2(accel_y, sqrt(accel_x * accel_x + accel_z * accel_z)); 
+
+    std::cout << "ROLL: " << livox_roll*57.2958 << std::endl;
+    std::cout << "PITCH: " << livox_pitch*57.2958 << std::endl;
+    double livox__yaw = 0.0;
+
+    tf2::Quaternion _Quaternion;
+    _Quaternion.setRPY(livox_roll, livox_pitch, livox__yaw);
+    geometry_msgs::msg::Quaternion Quaternion_msg;
+    Quaternion_msg = tf2::toMsg(_Quaternion);
+      if (kOutputToRos == output_type_) {
+        publisher_ptr->publish(Quaternion_msg);
+      } else {
+    #ifdef BUILDING_ROS1
+        if (bag_ && enable_lidar_bag_) {
+          bag_->write(publisher_ptr->getTopic(), ros::Time(timestamp / 1000000000.0), cloud);
+        }
+    #endif
+    }
+
+    _imu_accel_x_vector.clear();
+    _imu_accel_y_vector.clear();
+    _imu_accel_z_vector.clear();
+
+    quaternion_vector_filled=false;
+
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
+
 void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index) {
   ImuData imu_data;
   if (!imu_data_queue.Pop(imu_data)) {
@@ -505,7 +576,7 @@ void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index
   ImuMsg imu_msg;
   uint64_t timestamp;
   InitImuMsg(imu_data, imu_msg, timestamp);
-
+  StoreAccelerationValues(imu_msg);
 #ifdef BUILDING_ROS1
   PublisherPtr publisher_ptr = GetCurrentImuPublisher(index);
 #elif defined BUILDING_ROS2
@@ -547,9 +618,27 @@ std::shared_ptr<rclcpp::PublisherBase> Lddc::CreatePublisher(uint8_t msg_type,
           "%s publish use imu format", topic_name.c_str());
       return cur_node_->create_publisher<ImuMsg>(topic_name,
           queue_size);
+    }
+    else if (kLivoxQuaternionMsg == msg_type)  {
+      rclcpp::PublisherOptionsWithAllocator<std::allocator<void>> options;
+      options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+      DRIVER_INFO(*cur_node_,
+          "%s publish use quaternion format", topic_name.c_str());
+      return cur_node_->create_publisher<QuaternionMsg>(topic_name,rclcpp::QoS(1).keep_all().transient_local().reliable(), options);
     } else {
       PublisherPtr null_publisher(nullptr);
       return null_publisher;
+    }
+}
+std::shared_ptr<rclcpp::ServiceBase> Lddc::CreateService(uint8_t service_type,
+    std::string &service_name) {
+    if (kCalibrationSrv == service_type) {
+      DRIVER_INFO(*cur_node_,
+          "Using a service trigger service for calibration");
+      return cur_node_->create_service<TriggerSrv>(service_name,std::bind(&Lddc::CalibrateLivoxCb, this, std::placeholders::_1, std::placeholders::_2) );
+    } else {
+      ServicePtr null_service(nullptr);
+      return null_service;
     }
 }
 #endif
@@ -688,6 +777,26 @@ std::shared_ptr<rclcpp::PublisherBase> Lddc::GetCurrentImuPublisher(uint8_t hand
     return global_imu_pub_;
   }
 }
+
+std::shared_ptr<rclcpp::PublisherBase> Lddc::GetCurrentQuaternionPublisher() {
+  uint32_t queue_size = kMinEthPacketQueueSize;
+  if (!quaternion_imu_pub_) {
+    std::string topic_name("livox/angles");
+    queue_size = queue_size * 8; // shared queue size is 256, for all lidars
+    quaternion_imu_pub_ = CreatePublisher(kLivoxQuaternionMsg, topic_name, queue_size);
+  }
+  return quaternion_imu_pub_;
+}
+
+std::shared_ptr<rclcpp::ServiceBase> Lddc::GetCurrentCalibService() {
+  if (!calib_service_) {
+    std::string service_name("livox/calibration");
+    calib_service_ = CreateService(kCalibrationSrv, service_name);
+  }
+  
+  return calib_service_;
+}
+
 #endif
 
 void Lddc::CreateBagFile(const std::string &file_name) {
