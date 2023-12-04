@@ -3,10 +3,14 @@ import os
 from launch import LaunchDescription
 from launch_ros.actions import Node, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
+from launch.substitutions import LaunchConfiguration
+
+from ament_index_python.packages import get_package_share_directory
 
 from launch.actions import (
     GroupAction,
     TimerAction,
+    DeclareLaunchArgument,
 )
 
 # For respawing component container
@@ -45,6 +49,7 @@ livox_ros2_params = [
     {"cmdline_input_bd_code": cmdline_bd_code},
 ]
 
+lidar_filter_params_file = LaunchConfiguration("lidar_filter_params_file")
 
 def generate_launch_description():
     # livox_driver = Node(
@@ -74,25 +79,12 @@ def generate_launch_description():
                                 ComposableNode(
                                     package="pcl_ros",
                                     plugin="pcl_ros::CropBox",
-                                    name="pcl_box_filter",
+                                    name="pcl_box_livox_filter",
                                     remappings=[
                                         ("input", "/livox/lidar"),
                                         ("output", "/livox/filtered"),
                                     ],
-                                    parameters=[
-                                        {
-                                            "input_frame": "livox_link",
-                                            "output_frame": "livox_link",
-                                            "min_x": -0.61,
-                                            "max_x": 0.1,
-                                            "min_y": -0.25,
-                                            "max_y": 0.25,
-                                            "min_z": -1.0,
-                                            "max_z": 1.4,
-                                            "keep_organized": False,
-                                            "negative": True,
-                                        }
-                                    ],
+                                    parameters=[lidar_filter_params_file],
                                 ),
                                 ComposableNode(
                                     package="livox_ros_driver2",
@@ -128,6 +120,15 @@ def generate_launch_description():
     return LaunchDescription(
         [
             # livox_driver,
+            DeclareLaunchArgument(
+                "lidar_filter_params_file",
+                default_value=os.path.join(
+                    get_package_share_directory("navigation"),
+                    "config",
+                    "lidar_livox_filter.yaml",
+                ),
+                description="Full path to the ROS2 parameters file to use livox filter",
+            ),
             livox360_composed_launch(),
             respawn_livox360_composition_event_handler,
             # launch.actions.RegisterEventHandler(
