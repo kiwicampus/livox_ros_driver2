@@ -125,7 +125,7 @@ def generate_launch_description():
                 default_value=os.path.join(
                     get_package_share_directory("navigation"),
                     "config",
-                    "lidar_livox_filter.yaml",
+                    "livox_filter.yaml",
                 ),
                 description="Full path to the ROS2 parameters file to use livox filter",
             ),
