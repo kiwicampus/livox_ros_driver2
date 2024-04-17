@@ -1,7 +1,5 @@
 import os
-import launch
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
@@ -83,14 +81,14 @@ def generate_launch_description():
                                     ],
                                     parameters=[
                                         {
-                                            "input_frame": "laser_link",
-                                            "output_frame": "laser_link",
-                                            "min_x": -0.61,
-                                            "max_x": 0.1,
-                                            "min_y": -0.25,
-                                            "max_y": 0.25,
+                                            "input_frame": "livox_link",
+                                            "output_frame": "livox_link",
+                                            "min_x": -0.65,
+                                            "max_x": 0.15,
+                                            "min_y": -0.28,
+                                            "max_y": 0.28,
                                             "min_z": -1.0,
-                                            "max_z": 1.4,
+                                            "max_z": 1.6,
                                             "keep_organized": False,
                                             "negative": True,
                                         }
