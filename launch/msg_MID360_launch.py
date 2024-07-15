@@ -1,4 +1,9 @@
 import os
+import time
+import subprocess
+import threading
+
+
 
 from launch import LaunchDescription
 from launch_ros.actions import Node, LoadComposableNodes
@@ -14,6 +19,9 @@ from launch.actions import RegisterEventHandler
 from launch.launch_context import LaunchContext
 from launch.events.process.process_exited import ProcessExited
 from launch.event_handlers.on_process_exit import OnProcessExit
+from launch.events.process.process_started import ProcessStarted
+from launch.event_handlers.on_process_start import OnProcessStart
+
 
 ################### user configure parameters for ros2 start ###################
 xfer_format = 0  # 0-Pointcloud2(PointXYZRTL), 1-customized pointcloud format
@@ -121,8 +129,23 @@ def generate_launch_description():
             print(f"respawning: {event.cmd[-1].split('=')[-1]}...")
             return livox360_composed_launch()  # respawn node action
 
+    def reniceness_execute():
+        time.sleep(10)
+        print(f"Renicing LIVOX Component")
+        cmd = "ps -eLf | grep 'livox_360' | grep -v grep | awk '{print $4}' | xargs -r -n1 renice -20 -p"
+        subprocess.call(cmd, shell=True)
+
+    def reniceness_livox360_component(event: ProcessStarted, context: LaunchContext):
+        # Start a new thread to run the command
+        threading.Thread(target=reniceness_execute).start()
+
+
     respawn_livox360_composition_event_handler = RegisterEventHandler(
         event_handler=OnProcessExit(on_exit=relaunch_livox360_component)
+    )
+
+    reniceness_livox360_composition_event_handler = RegisterEventHandler(
+        event_handler=OnProcessStart(on_start=reniceness_livox360_component)
     )
 
     return LaunchDescription(
@@ -130,6 +153,7 @@ def generate_launch_description():
             # livox_driver,
             livox360_composed_launch(),
             respawn_livox360_composition_event_handler,
+            reniceness_livox360_composition_event_handler,
             # launch.actions.RegisterEventHandler(
             #     event_handler=launch.event_handlers.OnProcessExit(
             #         target_action=livox_rviz,
