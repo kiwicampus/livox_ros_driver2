@@ -8,6 +8,7 @@ import threading
 from launch import LaunchDescription
 from launch_ros.actions import Node, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
+from ament_index_python.packages import get_package_share_directory
 
 from launch.actions import (
     GroupAction,
@@ -53,6 +54,17 @@ livox_ros2_params = [
     {"cmdline_input_bd_code": cmdline_bd_code},
 ]
 
+# Lidar 3D filter Params
+lidar_3d_filter_params_file = None
+try:
+    lidar_3d_filter_params_file = os.path.join(
+        get_package_share_directory("navigation"),
+        "config",
+        "3d_lidar_filter_params.yaml",
+    )
+except Exception as e:
+    print(f"3D Lidar filter failed reading params file. Got: {e}")
+
 
 def generate_launch_description():
     # livox_driver = Node(
@@ -87,20 +99,7 @@ def generate_launch_description():
                                         ("input", "/livox/lidar"),
                                         ("output", "/livox/filtered"),
                                     ],
-                                    parameters=[
-                                        {
-                                            "input_frame": "livox_link",
-                                            "output_frame": "livox_link",
-                                            "min_x": -0.65,
-                                            "max_x": 0.15,
-                                            "min_y": -0.28,
-                                            "max_y": 0.28,
-                                            "min_z": -1.0,
-                                            "max_z": 1.6,
-                                            "keep_organized": False,
-                                            "negative": True,
-                                        }
-                                    ],
+                                    parameters=[lidar_3d_filter_params_file],
                                 ),
                                 ComposableNode(
                                     package="livox_ros_driver2",
@@ -131,7 +130,7 @@ def generate_launch_description():
 
     def reniceness_execute():
         time.sleep(10)
-        print(f"Renicing LIVOX Component")
+        print("Renicing LIVOX Component")
         cmd = "ps -eLf | grep 'livox_360' | grep -v grep | awk '{print $4}' | xargs -r -n1 renice -20 -p"
         subprocess.call(cmd, shell=True)
 
