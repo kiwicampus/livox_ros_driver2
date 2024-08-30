@@ -217,9 +217,14 @@ void DriverNode::PointCloudDataPollThread()
   std::future_status status;
   std::this_thread::sleep_for(std::chrono::seconds(3));
   do {
-    if(!pause_data_publishing_)
+    if(!pause_data_publishing_){
       lddc_ptr_->DistributePointCloudData();
-    status = future_.wait_for(std::chrono::microseconds(0));
+      status = future_.wait_for(std::chrono::microseconds(0));
+    }
+    else
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
   } while (status == std::future_status::timeout);
 }
 
@@ -228,9 +233,14 @@ void DriverNode::ImuDataPollThread()
   std::future_status status;
   std::this_thread::sleep_for(std::chrono::seconds(3));
   do {
-    if(!pause_data_publishing_)
+    if(!pause_data_publishing_){
       lddc_ptr_->DistributeImuData();
-    status = future_.wait_for(std::chrono::microseconds(0));
+      status = future_.wait_for(std::chrono::microseconds(0));
+    }
+    else
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
   } while (status == std::future_status::timeout);
 }
 
