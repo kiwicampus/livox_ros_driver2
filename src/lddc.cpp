@@ -325,9 +325,18 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
   std::vector<LivoxPointXyzrtlt> points;
   for (size_t i = 0; i < pkg.points_num; ++i) {
     LivoxPointXyzrtlt point;
-    point.x = pkg.points[i].x;
-    point.y = pkg.points[i].y;
-    point.z = pkg.points[i].z;
+    if(std::abs(pkg.points[i].x) < 1e-3 && std::abs(pkg.points[i].y) < 1e-3 && std::abs(pkg.points[i].z) < 1e-3)
+    {
+      point.x = std::numeric_limits<float>::quiet_NaN();
+      point.y = std::numeric_limits<float>::quiet_NaN();
+      point.z = std::numeric_limits<float>::quiet_NaN();
+    }
+    else
+    {
+      point.x = pkg.points[i].x;
+      point.y = pkg.points[i].y;
+      point.z = pkg.points[i].z;
+    }
     point.reflectivity = pkg.points[i].intensity;
     point.tag = pkg.points[i].tag;
     point.line = pkg.points[i].line;
