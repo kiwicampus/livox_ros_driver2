@@ -323,28 +323,26 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
   #endif
 
   std::vector<LivoxPointXyzrtlt> points;
+  int valid_points = 0;
   for (size_t i = 0; i < pkg.points_num; ++i) {
     LivoxPointXyzrtlt point;
     if(std::abs(pkg.points[i].x) < 1e-3 && std::abs(pkg.points[i].y) < 1e-3 && std::abs(pkg.points[i].z) < 1e-3)
     {
-      point.x = std::numeric_limits<float>::quiet_NaN();
-      point.y = std::numeric_limits<float>::quiet_NaN();
-      point.z = std::numeric_limits<float>::quiet_NaN();
+      continue;
     }
-    else
-    {
-      point.x = pkg.points[i].x;
-      point.y = pkg.points[i].y;
-      point.z = pkg.points[i].z;
-    }
+    point.x = pkg.points[i].x;
+    point.y = pkg.points[i].y;
+    point.z = pkg.points[i].z;
+    valid_points++;
+
     point.reflectivity = pkg.points[i].intensity;
     point.tag = pkg.points[i].tag;
     point.line = pkg.points[i].line;
     point.timestamp = static_cast<double>(pkg.points[i].offset_time);
     points.push_back(std::move(point));
   }
-  cloud.data.resize(pkg.points_num * sizeof(LivoxPointXyzrtlt));
-  memcpy(cloud.data.data(), points.data(), pkg.points_num * sizeof(LivoxPointXyzrtlt));
+  cloud.data.resize(valid_points * sizeof(LivoxPointXyzrtlt));
+  memcpy(cloud.data.data(), points.data(), valid_points * sizeof(LivoxPointXyzrtlt));
 }
 
 void Lddc::PublishPointcloud2Data(const uint8_t index, const uint64_t timestamp, const PointCloud2& cloud) {
