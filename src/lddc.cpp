@@ -306,9 +306,6 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
 
   cloud.point_step = sizeof(LivoxPointXyzrtlt);
 
-  cloud.width = pkg.points_num;
-  cloud.row_step = cloud.width * cloud.point_step;
-
   cloud.is_bigendian = false;
   cloud.is_dense     = true;
 
@@ -341,6 +338,8 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
     point.timestamp = static_cast<double>(pkg.points[i].offset_time);
     points.push_back(std::move(point));
   }
+  cloud.width = valid_points;
+  cloud.row_step = cloud.width * cloud.point_step;
   cloud.data.resize(valid_points * sizeof(LivoxPointXyzrtlt));
   memcpy(cloud.data.data(), points.data(), valid_points * sizeof(LivoxPointXyzrtlt));
 }
