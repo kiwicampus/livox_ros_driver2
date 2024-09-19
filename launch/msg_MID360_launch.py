@@ -24,6 +24,18 @@ from launch.events.process.process_started import ProcessStarted
 from launch.event_handlers.on_process_start import OnProcessStart
 
 
+def is_container_name_in_process_cmd(container_name: str, process_cmd: list) -> bool:
+    """! Function to check whether a component name is in a process cmd
+    @param container_name (str) the name of the container to search for
+    @param process_cmd (str) the process' cmd
+    @return bool Whether the container name is in the process cmd
+    """
+    for element in process_cmd:
+        if container_name in element:
+            return True
+    return False
+
+
 ################### user configure parameters for ros2 start ###################
 xfer_format = 0  # 0-Pointcloud2(PointXYZRTL), 1-customized pointcloud format
 multi_topic = 0  # 0-All LiDARs share the same topic, 1-One LiDAR one topic
@@ -136,7 +148,13 @@ def generate_launch_description():
 
     def reniceness_livox360_component(event: ProcessStarted, context: LaunchContext):
         # Start a new thread to run the command
-        threading.Thread(target=reniceness_execute).start()
+        if (
+                "component_container_isolated" in event.action.name
+                and is_container_name_in_process_cmd(
+                    container_name=container_name, process_cmd=event.cmd
+            )
+        ):
+            threading.Thread(target=reniceness_execute).start()
 
 
     respawn_livox360_composition_event_handler = RegisterEventHandler(
