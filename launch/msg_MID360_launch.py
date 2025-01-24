@@ -143,7 +143,7 @@ def generate_launch_description():
     def reniceness_execute():
         time.sleep(10)
         print("Renicing LIVOX Component")
-        cmd = "ps -eLf | grep 'livox_360' | grep -v grep | awk '{print $4}' | xargs -r -n1 renice -20 -p"
+        cmd = "ps -eLf | grep 'livox_360' | grep -v grep | awk '{print $4}' | xargs -r -n1 renice -20 -p 1> /dev/null"
         subprocess.call(cmd, shell=True)
 
     def reniceness_livox360_component(event: ProcessStarted, context: LaunchContext):
