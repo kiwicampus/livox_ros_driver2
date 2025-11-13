@@ -6,6 +6,9 @@ import threading
 
 
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition, UnlessCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 from ament_index_python.packages import get_package_share_directory
@@ -50,7 +53,7 @@ cur_path = os.path.split(os.path.realpath(__file__))[0] + "/"
 cur_config_path = cur_path + "../config"
 user_config_path = os.path.join(cur_config_path, "MID360_config.json")
 
-container_name = "livox_360_container"
+default_container_name = "livox_360_container"
 
 ################### user configure parameters for ros2 end #####################
 
@@ -79,6 +82,10 @@ except Exception as e:
 
 
 def generate_launch_description():
+    # Launch configurations
+    use_composition = LaunchConfiguration("use_composition")
+    container_name = LaunchConfiguration("container_name")
+
     # livox_driver = Node(
     #     package="livox_ros_driver2",
     #     executable="livox_ros_driver2_node",
@@ -88,11 +95,42 @@ def generate_launch_description():
     #     respawn_delay=5.0,
     #     parameters=livox_ros2_params,
     # )
-    def livox360_composed_launch():
+    
+    # Composed launch using provided container (doesn't create container)
+    def livox360_composed_launch_shared_container():
+        return TimerAction(
+            period=5.0,
+            actions=[
+                LoadComposableNodes(
+                    target_container=container_name,
+                    composable_node_descriptions=[
+                        ComposableNode(
+                            package="pcl_ros",
+                            plugin="pcl_ros::CropBox",
+                            name="pcl_box_filter",
+                            remappings=[
+                                ("input", "/livox/lidar"),
+                                ("output", "/livox/filtered"),
+                            ],
+                            parameters=[lidar_3d_filter_params_file],
+                        ),
+                        ComposableNode(
+                            package="livox_ros_driver2",
+                            plugin="livox_ros::DriverNode",
+                            name="livox_lidar_publisher",
+                            parameters=livox_ros2_params,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+    # Composed launch with own container (for backward compatibility)
+    def livox360_composed_launch_own_container():
         return GroupAction(
             actions=[
                 Node(
-                    name=container_name,
+                    name=default_container_name,
                     package="rclcpp_components",
                     executable="component_container_isolated",
                     output="both",
@@ -101,7 +139,7 @@ def generate_launch_description():
                     period=5.0,
                     actions=[
                         LoadComposableNodes(
-                            target_container=container_name,
+                            target_container=default_container_name,
                             composable_node_descriptions=[
                                 ComposableNode(
                                     package="pcl_ros",
@@ -127,10 +165,11 @@ def generate_launch_description():
         )
 
     def relaunch_livox360_component(event: ProcessExited, context: LaunchContext):
+        container_name_val = context.launch_configurations.get("container_name", default_container_name)
         if (
             event.returncode != 0
             and "component_container_isolated" in event.action.name
-            and container_name in event.cmd[-1]
+            and container_name_val in event.cmd[-1]
         ):
             print(
                 "\n\nProcess [{}] exited, pid: {}, return code: {}\n\n".format(
@@ -138,7 +177,10 @@ def generate_launch_description():
                 )
             )
             print(f"respawning: {event.cmd[-1].split('=')[-1]}...")
-            return livox360_composed_launch()  # respawn node action
+            # Only respawn if we created our own container
+            use_comp_val = context.launch_configurations.get("use_composition", "false")
+            if use_comp_val.lower() != "true":
+                return livox360_composed_launch_own_container()  # respawn node action
 
     def reniceness_execute():
         time.sleep(10)
@@ -148,10 +190,11 @@ def generate_launch_description():
 
     def reniceness_livox360_component(event: ProcessStarted, context: LaunchContext):
         # Start a new thread to run the command
+        container_name_val = context.launch_configurations.get("container_name", default_container_name)
         if (
                 "component_container_isolated" in event.action.name
                 and is_container_name_in_process_cmd(
-                    container_name=container_name, process_cmd=event.cmd
+                    container_name=container_name_val, process_cmd=event.cmd
             )
         ):
             threading.Thread(target=reniceness_execute).start()
@@ -167,10 +210,33 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            # livox_driver,
-            livox360_composed_launch(),
-            respawn_livox360_composition_event_handler,
-            reniceness_livox360_composition_event_handler,
+            # Launch arguments
+            DeclareLaunchArgument(
+                "use_composition",
+                default_value="false",
+                description="Whether to use provided container (true) or create own container (false)",
+            ),
+            DeclareLaunchArgument(
+                "container_name",
+                default_value=default_container_name,
+                description="Name of the container to load composable nodes into",
+            ),
+            # Use shared container (provided from parent launch)
+            GroupAction(
+                condition=IfCondition(use_composition),
+                actions=[
+                    livox360_composed_launch_shared_container(),
+                ],
+            ),
+            # Use own container (backward compatibility)
+            GroupAction(
+                condition=UnlessCondition(use_composition),
+                actions=[
+                    livox360_composed_launch_own_container(),
+                    respawn_livox360_composition_event_handler,
+                    reniceness_livox360_composition_event_handler,
+                ],
+            ),
             # launch.actions.RegisterEventHandler(
             #     event_handler=launch.event_handlers.OnProcessExit(
             #         target_action=livox_rviz,
