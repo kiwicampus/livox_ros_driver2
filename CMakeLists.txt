@@ -217,6 +217,12 @@ else(ROS_EDITION STREQUAL "ROS2")
   #---------------------------------------------------------------------------------------
   add_definitions(-DBUILDING_ROS2)
 
+  # build.sh passes -DDISTRO_ROS; a plain `colcon build` does not, and without it the Foxy-era
+  # typesupport branch below fails on Humble and Jazzy. Default it from the sourced ROS environment.
+  if(NOT DISTRO_ROS AND DEFINED ENV{ROS_DISTRO})
+    set(DISTRO_ROS $ENV{ROS_DISTRO})
+  endif()
+
   # find dependencies
   # uncomment the following section in order to fill in
   # further dependencies manually.
