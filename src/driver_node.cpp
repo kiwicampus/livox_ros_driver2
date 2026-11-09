@@ -34,6 +34,10 @@ DriverNode& DriverNode::GetNode() noexcept {
 DriverNode::~DriverNode() {
   lddc_ptr_->lds_->RequestExit();
   exit_signal_.set_value();
+  // The poll threads block on these until a packet arrives, so with no data flowing (lidar off or
+  // unplugged) join() below never returned and the process had to be killed. Wake them to see the exit.
+  lddc_ptr_->lds_->pcd_semaphore_.Signal();
+  lddc_ptr_->lds_->imu_semaphore_.Signal();
   pointclouddata_poll_thread_->join();
   imudata_poll_thread_->join();
 }

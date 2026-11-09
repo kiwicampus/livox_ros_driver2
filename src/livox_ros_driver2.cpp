@@ -26,6 +26,7 @@
 #include <chrono>
 #include <vector>
 #include <csignal>
+#include <stdexcept>
 #include <thread>
 
 #include "include/livox_ros_driver2.h"
@@ -176,6 +177,11 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
       DRIVER_INFO(*this, "Init lds lidar success!");
     } else {
       DRIVER_ERROR(*this, "Init lds lidar fail!");
+      // Fatal, and nothing recovers on its own (e.g. the host address of the config is not on any
+      // interface yet). Carrying on leaves a node that idles forever, which a supervisor cannot tell
+      // from a healthy one with no lidar attached; leaving here exits the process non-zero so a
+      // launch `respawn` retries.
+      throw std::runtime_error("Init lds lidar fail! Check the host address in the config file");
     }
   } else {
     DRIVER_ERROR(*this, "Invalid data src (%d), please check the launch file", data_src);
