@@ -198,6 +198,41 @@ void Lddc::PrepareExit(void) {
   }
 }
 
+#ifdef BUILDING_ROS2
+void Lddc::EnableMerge(double pair_tolerance_s, double min_range_m) {
+  merger_ = std::make_unique<ScanMerger>(pair_tolerance_s, min_range_m);
+}
+
+void Lddc::PublishMergedScans(uint8_t index, StoragePacket &&pkg) {
+  // The points already are in the common frame (the driver applies each lidar's extrinsic_parameter when
+  // it converts the packets), so the sensor sits at the translation of that extrinsic. It is in mm and
+  // the points are metres, which holds for the high resolution Cartesian data (pcl_data_type 1).
+  const ExtParameter &extrinsic = lds_->lidars_[index].livox_config.extrinsic_param;
+  const ScanMerger::Origin origin = {static_cast<float>(extrinsic.x) / 1000.0f,
+                                     static_cast<float>(extrinsic.y) / 1000.0f,
+                                     static_cast<float>(extrinsic.z) / 1000.0f};
+  for (const StoragePacket &scan : merger_->Add(index, origin, std::move(pkg))) {
+    PointCloud2 cloud;
+    uint64_t timestamp = 0;
+    InitPointcloud2Msg(scan, cloud, timestamp);
+    PublishPointcloud2Data(index, timestamp, cloud);
+  }
+
+  // Scans that keep going out without the scan of a lidar the driver has seen mean the lidars do not share
+  // a clock (PTP/GPS sync is off on one of them), or one of them stopped. One such scan is normal at
+  // start-up, so say so only once it has happened 10 times, and then every 100 more.
+  const uint64_t partial = merger_->PartialCount();
+  if (partial - reported_partial_ >= (reported_partial_ == 0 ? 10 : 100)) {
+    DRIVER_WARN(*cur_node_,
+                "%lu merged scans so far went out without the scan of every lidar (%lu complete): a lidar "
+                "stopped, or the lidars' timestamps are not in sync (they must agree within the pairing "
+                "tolerance)",
+                static_cast<unsigned long>(partial), static_cast<unsigned long>(merger_->CompleteCount()));
+    reported_partial_ = partial;
+  }
+}
+#endif
+
 void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
   while(!QueueIsEmpty(queue)) {
     StoragePacket pkg;
@@ -206,6 +241,12 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
       printf("Publish point cloud2 failed, the pkg points is empty.\n");
       continue;
     }
+#ifdef BUILDING_ROS2
+    if (merger_) {
+      PublishMergedScans(index, std::move(pkg));
+      continue;
+    }
+#endif
 
     PointCloud2 cloud;
     uint64_t timestamp = 0;
@@ -641,7 +682,7 @@ PublisherPtr Lddc::GetCurrentImuPublisher(uint8_t handle) {
 #elif defined BUILDING_ROS2
 std::shared_ptr<rclcpp::PublisherBase> Lddc::GetCurrentPublisher(uint8_t handle) {
   uint32_t queue_size = kMinEthPacketQueueSize;
-  if (use_multi_topic_) {
+  if (use_multi_topic_ && !merger_) {
     if (!private_pub_[handle]) {
       char name_str[48];
       memset(name_str, 0, sizeof(name_str));

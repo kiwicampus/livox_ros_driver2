@@ -138,6 +138,13 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("user_config_path", "path_default");
   this->declare_parameter("cmdline_input_bd_code", "000000000000001");
   this->declare_parameter("lvx_file_path", "/home/livox/livox_test.lvx");
+  // Publish the clouds of all the lidars as one `livox/lidar` cloud instead of one topic per lidar. The
+  // lidars are put in a common frame by the extrinsic_parameter of the config file; scans closer in time
+  // than merge_pair_tolerance (s) are joined, and points closer than merge_min_range (m) to their sensor
+  // are dropped (0 keeps them). The IMU topics stay one per lidar.
+  this->declare_parameter("merge_lidars", 0);
+  this->declare_parameter("merge_pair_tolerance", 0.05);
+  this->declare_parameter("merge_min_range", 0.0);
 
   this->get_parameter("xfer_format", xfer_format);
   this->get_parameter("multi_topic", multi_topic);
@@ -145,6 +152,16 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->get_parameter("publish_freq", publish_freq);
   this->get_parameter("output_data_type", output_type);
   this->get_parameter("frame_id", frame_id);
+  int merge_lidars = 0;
+  double merge_pair_tolerance = 0.05;
+  double merge_min_range = 0.0;
+  this->get_parameter("merge_lidars", merge_lidars);
+  this->get_parameter("merge_pair_tolerance", merge_pair_tolerance);
+  this->get_parameter("merge_min_range", merge_min_range);
+  if (merge_lidars && xfer_format != kPointCloud2Msg) {
+    // Only PointCloud2 is merged; carrying on would publish one topic per lidar, which is not what was asked.
+    throw std::runtime_error("merge_lidars needs xfer_format 0 (PointCloud2)");
+  }
 
   if (publish_freq > 100.0) {
     publish_freq = 100.0;
@@ -159,6 +176,11 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   /** Lidar data distribute control and lidar data source set */
   lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type, publish_freq, frame_id);
   lddc_ptr_->SetRosNode(this);
+  if (merge_lidars) {
+    lddc_ptr_->EnableMerge(merge_pair_tolerance, merge_min_range);
+    DRIVER_INFO(*this, "Merging the lidars into one cloud (pair tolerance %.3f s, min range %.2f m).",
+                merge_pair_tolerance, merge_min_range);
+  }
 
   if (data_src == kSourceRawLidar) {
     DRIVER_INFO(*this, "Data Source is raw lidar.");

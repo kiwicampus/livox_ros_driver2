@@ -27,6 +27,7 @@
 
 #include "include/livox_ros_driver2.h"
 
+#include "comm/scan_merger.h"
 #include "driver_node.h"
 #include "lds.h"
 
@@ -90,6 +91,17 @@ class Lddc final {
   uint8_t IsMultiTopic(void) { return use_multi_topic_; }
   void SetRosNode(livox_ros::DriverNode *node) { cur_node_ = node; }
 
+#ifdef BUILDING_ROS2
+  /**
+   * Publishes the PointCloud2 scans of all the lidars as one cloud on `livox/lidar` instead of one
+   * topic per lidar (the IMU topics are not affected). Call it before data flows.
+   *
+   * @param pair_tolerance_s Scans of different lidars closer in time than this are merged.
+   * @param min_range_m Points closer than this to their own sensor are dropped (0 keeps them).
+   */
+  void EnableMerge(double pair_tolerance_s, double min_range_m);
+#endif
+
   // void SetRosPub(ros::Publisher *pub) { global_pub_ = pub; };  // NOT USED
   void SetPublishFrq(uint32_t frq) { publish_frq_ = frq; }
 
@@ -101,6 +113,9 @@ class Lddc final {
   void PollingLidarImuData(uint8_t index, LidarDevice *lidar);
 
   void PublishPointcloud2(LidarDataQueue *queue, uint8_t index);
+#ifdef BUILDING_ROS2
+  void PublishMergedScans(uint8_t index, StoragePacket &&pkg);
+#endif
   void PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index);
   void PublishPclMsg(LidarDataQueue *queue, uint8_t index);
 
@@ -153,6 +168,8 @@ class Lddc final {
   PublisherPtr global_pub_;
   PublisherPtr private_imu_pub_[kMaxSourceLidar];
   PublisherPtr global_imu_pub_;
+  std::unique_ptr<ScanMerger> merger_;  // set when the clouds of all lidars are published as one
+  uint64_t reported_partial_ = 0;
 #endif
 
   livox_ros::DriverNode *cur_node_;

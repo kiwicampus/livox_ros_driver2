@@ -277,6 +277,7 @@ else(ROS_EDITION STREQUAL "ROS2")
     src/comm/lidar_imu_data_queue.cpp
     src/comm/cache_index.cpp
     src/comm/pub_handler.cpp
+    src/comm/scan_merger.cpp
 
     src/parse_cfg_file/parse_cfg_file.cpp
     src/parse_cfg_file/parse_livox_lidar_cfg.cpp
@@ -332,6 +333,11 @@ else(ROS_EDITION STREQUAL "ROS2")
     # uncomment the line when this package is not in a git repo
     #set(ament_cmake_cpplint_FOUND TRUE)
     ament_lint_auto_find_test_dependencies()
+
+    # unit tests of the pure C++ parts (no lidar, no ROS graph)
+    find_package(ament_cmake_gtest REQUIRED)
+    ament_add_gtest(test_scan_merger test/test_scan_merger.cpp src/comm/scan_merger.cpp)
+    target_include_directories(test_scan_merger PRIVATE src)
   endif()
 
   ament_auto_package(INSTALL_TO_SHARE
