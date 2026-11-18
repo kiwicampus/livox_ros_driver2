@@ -42,6 +42,10 @@ class CacheIndex {
   int8_t GenerateIndexKey(const uint8_t livox_lidar_type, const uint32_t handle, std::string& key);
   int8_t LvxGetIndex(const uint8_t livox_lidar_type, const uint32_t handle, uint8_t& index);
   void ResetIndex(LidarDevice *lidar);
+  // Index of the only cached lidar; fails unless exactly one lidar is cached.
+  int8_t GetOnlyIndex(uint8_t& index);
+  // Moves the only cached lidar to new_handle; fails unless exactly one lidar is cached.
+  int8_t ReplaceOnlyHandle(const uint8_t livox_lidar_type, const uint32_t new_handle);
 
  private:
   std::mutex index_mutex_;

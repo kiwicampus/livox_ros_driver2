@@ -30,6 +30,31 @@
 
 namespace livox_ros {
 
+namespace {
+// Each MID360 has its own IP (192.168.1.1XX from its serial), while the config lists one IP. A lidar
+// not in the config is registered without config and never moved to sampling, so it never
+// publishes. When the config has a single lidar that never connected, hand its config to the lidar
+// that showed up instead.
+LidarDevice* AdoptOnlyConfiguredLidar(const uint32_t handle, LdsLidar* lds_lidar) {
+  uint8_t index = 0;
+  if (lds_lidar->cache_index_.GetOnlyIndex(index) != 0) {
+    return nullptr;
+  }
+  LidarDevice* lidar_device = &(lds_lidar->lidars_[index]);
+  if (lidar_device->connect_state == kConnectStateSampling) {
+    return nullptr;  // the configured lidar is up: this is a second lidar
+  }
+  if (lds_lidar->cache_index_.ReplaceOnlyHandle(kLivoxLidarType, handle) != 0) {
+    return nullptr;
+  }
+  std::cout << "lidar " << IpNumToString(handle) << " not in the user-defined config, using the config of "
+            << IpNumToString(lidar_device->handle) << " for it" << std::endl;
+  lidar_device->handle = handle;
+  lidar_device->livox_config.handle = handle;
+  return lidar_device;
+}
+}  // namespace
+
 void LivoxLidarCallback::LidarInfoChangeCallback(const uint32_t handle,
                                            const LivoxLidarInfo* info,
                                            void* client_data) {
@@ -40,6 +65,9 @@ void LivoxLidarCallback::LidarInfoChangeCallback(const uint32_t handle,
   LdsLidar* lds_lidar = static_cast<LdsLidar*>(client_data);
 
   LidarDevice* lidar_device = GetLidarDevice(handle, client_data);
+  if (lidar_device == nullptr) {
+    lidar_device = AdoptOnlyConfiguredLidar(handle, lds_lidar);
+  }
   if (lidar_device == nullptr) {
     std::cout << "found lidar not defined in the user-defined config, ip: " << IpNumToString(handle) << std::endl;
     // add lidar device

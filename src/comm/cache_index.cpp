@@ -118,4 +118,28 @@ void CacheIndex::ResetIndex(LidarDevice *lidar) {
   }
 }
 
+int8_t CacheIndex::GetOnlyIndex(uint8_t& index) {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+  if (map_index_.size() != 1) {
+    return -1;
+  }
+  index = map_index_.begin()->second;
+  return 0;
+}
+
+int8_t CacheIndex::ReplaceOnlyHandle(const uint8_t livox_lidar_type, const uint32_t new_handle) {
+  std::string key;
+  if (GenerateIndexKey(livox_lidar_type, new_handle, key) != 0) {
+    return -1;
+  }
+  std::lock_guard<std::mutex> lock(index_mutex_);
+  if (map_index_.size() != 1) {
+    return -1;
+  }
+  uint8_t index = map_index_.begin()->second;
+  map_index_.clear();
+  map_index_[key] = index;
+  return 0;
+}
+
 } // namespace
